@@ -74,17 +74,9 @@ def stream(username):
     form = PostForm()
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
     if form.is_submitted():
-
-        
-        
-
         if form.image.data:
             image_path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
-            print(file_extension = os.path.splitext(image_path)[1])
-            if validate_file_size(form.image.data): # check file size
-                form.image.data.save(image_path)
-            
-               
+            form.image.data.save(image_path)
 
         query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
         return redirect(url_for('stream', username=username))
