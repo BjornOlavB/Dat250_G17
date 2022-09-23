@@ -1,3 +1,4 @@
+import re
 from flask import render_template, flash, redirect, url_for, request
 from app import app, query_db
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
@@ -5,14 +6,42 @@ from datetime import datetime
 import os
 from werkzeug.security import generate_password_hash,check_password_hash
 
+# validation check for upload of file size
+def validate_file_size(file):
+    if os.path.getsize(file) > 2: #10485760
+        flash("The maximum file size that can be uploaded is 10MB")
+        return False
+    else:
+        return True
+
+# validation check in register
+def RegisterValidate(register):
+    if register.first_name.data == "" or register.last_name.data == "" or \
+        register.username.data == "" or register.password.data == "" or \
+        register.confirm_password.data == "":
+        return False
+
+    if not re.search("(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}", register.password.data):
+        flash('password does not meet requirements: Requires 8 characters including one uppercase letter, one lowercase letter, and one number or special character.')
+        return False
+    
+    if register.password.data != register.confirm_password.data:
+        flash('password and confirm password do not match')
+        return False
+    return True
+
+
+
+
+
 # this file contains all the different routes, and the logic for communicating with the database
+
 
 # home page/login/registration
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     form = IndexForm()
-
     if form.login.is_submitted() and form.login.submit.data:
         user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
         if user == None:
@@ -22,15 +51,16 @@ def index():
         else:
             flash('Sorry, wrong username or password!')
 
-
     elif form.register.is_submitted() and form.register.submit.data:
-        user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.register.username.data), one=True)
-        if user != None:
-            flash('Username is already taken!')
-        else:
-            query_db('INSERT INTO Users (username, first_name, last_name, password) VALUES("{}", "{}", "{}", "{}");'.format(form.register.username.data, form.register.first_name.data,
-            form.register.last_name.data, generate_password_hash(form.register.password.data,"sha256")))
-            return redirect(url_for('index'))
+        form.validate_on_submit() # display form errors
+        if RegisterValidate(form.register):
+            user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.register.username.data), one=True)
+            if user != None:
+                flash('Username is already taken!')
+            else:
+                query_db('INSERT INTO Users (username, first_name, last_name, password) VALUES("{}", "{}", "{}", "{}");'.format(form.register.username.data, form.register.first_name.data,
+                form.register.last_name.data, generate_password_hash(form.register.password.data,"sha256")))
+                return redirect(url_for('index'))
     return render_template('index.html', title='Welcome', form=form)
 
 # content stream page
@@ -39,9 +69,18 @@ def stream(username):
     form = PostForm()
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
     if form.is_submitted():
+
+        
+        
+
         if form.image.data:
-            path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
-            form.image.data.save(path)
+            image_path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
+            print(file_extension = os.path.splitext(image_path)[1])
+            if validate_file_size(form.image.data): # check file size
+                form.image.data.save(image_path)
+            
+               
+
         query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
         return redirect(url_for('stream', username=username))
     posts = query_db('SELECT p.*, u.*, (SELECT COUNT(*) FROM Comments WHERE p_id=p.id) AS cc FROM Posts AS p JOIN Users AS u ON u.id=p.u_id WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id={0}) OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id={0}) OR p.u_id={0} ORDER BY p.creation_time DESC;'.format(user['id']))
