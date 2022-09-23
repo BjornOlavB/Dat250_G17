@@ -1,5 +1,5 @@
 import re
-from flask import render_template, flash, redirect, url_for, request
+from flask import render_template, flash, redirect, url_for, request,make_response
 from app import app, query_db
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
 from datetime import datetime
@@ -47,7 +47,9 @@ def index():
         if user == None:
             flash('Wrong username or password!')
         elif check_password_hash(user['password'],  form.login.password.data):
-            return redirect(url_for('stream', username=form.login.username.data))
+            res = make_response(redirect(url_for('stream', username=form.login.username.data)))
+            res.set_cookie("username",form.login.username.data)
+            return res
         else:
             flash('Sorry, wrong username or password!')
 
@@ -66,15 +68,16 @@ def index():
 # content stream page
 @app.route('/stream/<username>', methods=['GET', 'POST'])
 def stream(username):
+    coockieUsername = request.cookies.get("username")
+    if coockieUsername != username:
+        return redirect(url_for("index"))
     form = PostForm()
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
     if form.is_submitted():
-
-        if form.image.data: # adding size validation
+        if form.image.data:
             image_path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
-            if validate_file_size(image_path):
-                form.image.data.save(image_path)
-           
+            form.image.data.save(image_path)
+
         query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
         return redirect(url_for('stream', username=username))
     posts = query_db('SELECT p.*, u.*, (SELECT COUNT(*) FROM Comments WHERE p_id=p.id) AS cc FROM Posts AS p JOIN Users AS u ON u.id=p.u_id WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id={0}) OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id={0}) OR p.u_id={0} ORDER BY p.creation_time DESC;'.format(user['id']))
@@ -83,6 +86,9 @@ def stream(username):
 # comment page for a given post and user.
 @app.route('/comments/<username>/<int:p_id>', methods=['GET', 'POST'])
 def comments(username, p_id):
+    coockieUsername = request.cookies.get("username")
+    if coockieUsername != username:
+        return redirect(url_for("index"))
     form = CommentsForm()
     if form.is_submitted():
         user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
@@ -95,6 +101,9 @@ def comments(username, p_id):
 # page for seeing and adding friends
 @app.route('/friends/<username>', methods=['GET', 'POST'])
 def friends(username):
+    coockieUsername = request.cookies.get("username")
+    if coockieUsername != username:
+        return redirect(url_for("index"))
     form = FriendsForm()
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
     if form.is_submitted():
@@ -110,6 +119,9 @@ def friends(username):
 # see and edit detailed profile information of a user
 @app.route('/profile/<username>', methods=['GET', 'POST'])
 def profile(username):
+    coockieUsername = request.cookies.get("username")
+    if coockieUsername != username:
+        return redirect(url_for("index"))
     form = ProfileForm()
     if form.is_submitted():
         query_db('UPDATE Users SET education="{}", employment="{}", music="{}", movie="{}", nationality="{}", birthday=\'{}\' WHERE username="{}" ;'.format(
@@ -119,3 +131,9 @@ def profile(username):
     
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
     return render_template('profile.html', title='profile', username=username, user=user, form=form)
+
+@app.route('/logout')
+def logout():
+    res = make_response(redirect(url_for("index")))
+    res.set_cookie("username","",expires=0)
+    return res
