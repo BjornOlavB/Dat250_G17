@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, FileField
 from wtforms.fields.html5 import DateField
+from wtforms.validators import InputRequired, EqualTo
 
 # defines all forms in the application, these will be instantiated by the template,
 # and the routes.py will read the values of the fields
@@ -14,11 +15,11 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Sign In')
 
 class RegisterForm(FlaskForm):
-    first_name = StringField('First Name', render_kw={'placeholder': 'First Name'})
-    last_name = StringField('Last Name', render_kw={'placeholder': 'Last Name'})
-    username = StringField('Username', render_kw={'placeholder': 'Username'})
-    password = PasswordField('Password', render_kw={'placeholder': 'Password'})
-    confirm_password = PasswordField('Confirm Password', render_kw={'placeholder': 'Confirm Password'})
+    first_name = StringField('First Name',validators=[InputRequired()], render_kw={'placeholder': 'First Name'})
+    last_name = StringField('Last Name',validators=[InputRequired()], render_kw={'placeholder': 'Last Name'})
+    username = StringField('Username', render_kw={'placeholder': 'Username'},validators=[InputRequired()])
+    password = PasswordField('Password',validators=[InputRequired()], render_kw={'placeholder': 'Password'})
+    confirm_password = PasswordField('Confirm Password', validators=[InputRequired(),EqualTo(password)], render_kw={'placeholder': 'Confirm Password'})
     submit = SubmitField('Sign Up')
 
 class IndexForm(FlaskForm):
