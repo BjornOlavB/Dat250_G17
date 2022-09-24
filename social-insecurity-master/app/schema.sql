@@ -41,7 +41,7 @@ DROP TABLE IF EXISTS [Posts];
 CREATE TABLE [Posts](
   id INTEGER PRIMARY KEY,
   u_id INTEGER,
-  content INTEGER,
+  content VARCHAR,
   [image] VARCHAR,
   [creation_time] DATETIME,
   FOREIGN KEY (u_id) REFERENCES [Users](id)
