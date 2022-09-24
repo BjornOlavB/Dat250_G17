@@ -1,7 +1,10 @@
 from wsgiref.validate import validator
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, FileField, validators
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, validators
+from flask_wtf.file import FileField, FileAllowed
 from wtforms.fields.html5 import DateField
+
+
 
 # defines all forms in the application, these will be instantiated by the template,
 # and the routes.py will read the values of the fields
@@ -9,10 +12,10 @@ from wtforms.fields.html5 import DateField
 # TODO: There was some important security feature that wtforms provides, but I don't remember what; implement it
 
 class LoginForm(FlaskForm):
-    username = StringField('Username', validators=[validators.Required()],render_kw={'placeholder': 'Username'})
-    password = PasswordField('Password', validators=[validators.Required()], render_kw={'placeholder': 'Password'})
+    username = StringField('Username', validators=[validators.DataRequired()],render_kw={'placeholder': 'Username'})
+    password = PasswordField('Password', validators=[validators.DataRequired()], render_kw={'placeholder': 'Password'})
     remember_me = BooleanField('Remember me') # TODO: It would be nice to have this feature implemented, probably by using cookies
-    submit = SubmitField('Sign In')
+    submit = SubmitField('Log In')
 
 class RegisterForm(FlaskForm):
 
@@ -53,8 +56,22 @@ class IndexForm(FlaskForm):
     register = FormField(RegisterForm)
 
 class PostForm(FlaskForm):
-    content = TextAreaField('New Post', render_kw={'placeholder': 'What are you thinking about?'})
-    image = FileField('Image')
+
+    content_validator = [
+        validators.Length(
+            min=1,
+            max=1000,
+            message="Post must be between 1 and 1000 characters long"),
+        validators.Optional()
+    ]
+    image_validator = [
+        FileAllowed(
+            ['jpg', 'png'], 
+            message='You can only upload extensions: jpg, png'
+        )
+    ]
+    content = TextAreaField('New Post', validators=content_validator, render_kw={'placeholder': 'What are you thinking about?'})
+    image = FileField('Image',validators=image_validator) 
     submit = SubmitField('Post')
 
 class CommentsForm(FlaskForm):
