@@ -27,7 +27,8 @@
                         {% for comment in comments %}
                         <li class="list-group-item">
                             <div class="row align-items-center">
-                                <a class="col-4" href={{url_for('profile', username=comment.username)}}><span class="fa fa-user" style="font-size: 25px"></span>&nbsp;{{comment.username}}</a>
+                                <a class="col-4" href={{url_for('profile', username=comment.username)}}><span
+                                        class="fa fa-user" style="font-size: 25px"></span>&nbsp;{{comment.username}}</a>
                                 <span class="col-8 text-right">{{post.creation_time}}</span>
                             </div>
                             <p>{{comment.comment}}</p>
