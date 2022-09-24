@@ -14,7 +14,7 @@ DROP TABLE IF EXISTS [Users];
 
 CREATE TABLE [Users] (
   id INTEGER PRIMARY KEY,
-  username VARCHAR,
+  username VARCHAR UNIQUE,
   first_name VARCHAR,
   last_name VARCHAR,
   [password] VARCHAR,
@@ -23,9 +23,11 @@ CREATE TABLE [Users] (
   music VARCHAR DEFAULT 'Unknown',
   movie VARCHAR DEFAULT 'Unknown',
   nationality VARCHAR DEFAULT 'Unknown',
-  birthday DATE DEFAULT 'Unknown'
-);
+  birthday DATE DEFAULT 'Unknown',
 
+  login_attempts INT,
+  login_timeout REAL
+);
 -- ---
 -- Table 'Posts'
 -- 
