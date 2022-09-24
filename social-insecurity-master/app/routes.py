@@ -32,27 +32,30 @@ def index():
     if form.login.is_submitted() and form.login.submit.data:
         form.login.validate_on_submit() # CANT GET THIS TO WORK OBS!!!
         user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
-        
+    
+
         # Could not find user
         if user == None:
             flash('Wrong username or password!')
             return render_template('index.html', title='Welcome', form=form)
     
+
+      
+
         # Calculate the time left until the user can login again
-        if user["login_timeout"] == 0:
+        if user["login_timeout"] == None:
             time_left = 0
         else:
             lockout_date = user["login_timeout"]
             time_left = lockout_date - round(time.time())
-
             minutes = round(time_left//60)
             seconds = round(time_left%60)
 
 
         # Restore the login_attemps and login_timeout when the time is over
-        if time_left <= 0 and user["login_timeout"] != 0:
+        if time_left <= 0 and user["login_timeout"] != None:
             query_db('UPDATE Users \
-                    SET login_attempts = 0, login_timeout = 0\
+                    SET login_attempts = 0, login_timeout = NULL\
                     WHERE id = "{}";'.format(user["id"]), one=True)
             user = query_db('SELECT * FROM Users WHERE username="{}";'.format(user["id"]), one=True)
         
@@ -79,7 +82,6 @@ def index():
             elif user["Login_attempts"] == 2:
                 lockout_time = 5 # minutes
                 lockout_stamp = time.time() + lockout_time*60 # minutes
-             
                 flash(f'You have been locked out of your account for {lockout_time} minutes due to too many failed login attempts')
                 query_db('UPDATE Users SET login_timeout = "{}" WHERE id = "{}";'.format(lockout_stamp,user["id"]), one=True)
         #_________________________________
@@ -97,10 +99,9 @@ def index():
                         username, 
                         first_name, 
                         last_name, 
-                        password,
-                        login_attempts,
-                        login_timeout
-                        ) VALUES("{}","{}","{}","{}",0,0);"""
+                        password
+                        ) 
+                        VALUES("{}","{}","{}","{}");"""
                 .format(form.register.username.data, 
                         form.register.first_name.data,
                         form.register.last_name.data, 
