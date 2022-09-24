@@ -25,8 +25,11 @@ CREATE TABLE [Users] (
   nationality VARCHAR DEFAULT 'Unknown',
   birthday DATE DEFAULT 'Unknown',
 
-  login_attempts INT,
-  login_timeout REAL
+  login_attempts INTEGER DEFAULT 0,
+  login_timeout REAL DEFAULT NULL,
+
+  stream_posts INTEGER DEFAULT 0,
+  stream_timeout REAL DEFAULT NULL
 );
 -- ---
 -- Table 'Posts'
