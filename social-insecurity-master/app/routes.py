@@ -9,19 +9,18 @@ import time
 
 
 
-
-# validation check for upload of file size
-def validate_file_size(file):
-    if os.path.getsize(file) > 2: #10485760
-        flash("The maximum file size that can be uploaded is 10MB")
-        return False
-    else:
+# function that wraps the validate_on_submit() method of the form
+# this function removes the validation of cs_token, which is fu
+def my_validation(form_type):
+    form_type.validate_on_submit() # whos validation errors
+    errs = form_type.errors
+    if len(errs) == 1 and "csrf_token" in errs:
         return True
-
+    else:
+        return False
 
 
 # this file contains all the different routes, and the logic for communicating with the database
-
 
 # home page/login/registration
 @app.route('/', methods=['GET', 'POST'])
@@ -29,18 +28,14 @@ def validate_file_size(file):
 def index():
     form = IndexForm()
     
-    if form.login.is_submitted() and form.login.submit.data:
-        form.login.validate_on_submit() # CANT GET THIS TO WORK OBS!!!
-        user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
-    
 
+    if form.login.is_submitted() and form.login.submit.data and my_validation(form.login):
+        user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
         # Could not find user
         if user == None:
             flash('Wrong username or password!')
             return render_template('index.html', title='Welcome', form=form)
-    
 
-      
 
         # Calculate the time left until the user can login again
         if user["login_timeout"] == None:
@@ -89,7 +84,7 @@ def index():
         else:
             flash('Unknown error')
 
-    elif form.register.is_submitted() and form.register.submit.data and form.register.validate_on_submit():
+    elif form.register.is_submitted() and form.register.submit.data and my_validation(form.register):
             user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.register.username.data), one=True)
             if user != None:
                 flash('Username is already taken!')
@@ -115,19 +110,51 @@ def index():
 @app.route('/stream/<username>', methods=['GET', 'POST'])
 def stream(username):
     form = PostForm()
+
+    # if the user is not logged in, redirect to the login page
     coockieUsername = request.cookies.get("username")
     if coockieUsername != username:
-        return redirect(url_for("index"))
+        return redirect(url_for('stream', username=coockieUsername))
+        #return redirect(url_for("index"))
 
+    # if the user is logged in, show the stream
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
-    if form.is_submitted():
+
+    if form.is_submitted() and form.submit.data and my_validation(form):
+
+        # Remove all the newlines and carriage returns from the content of the post
+        content = form.content.data.replace("\n", "").replace("\r", "")
+    
         if form.image.data:
-            image_path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
-            form.image.data.save(image_path)
-        query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
+            path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
+            form.image.data.save(path)
+            query_db(
+                """INSERT INTO Posts (
+                    u_id, 
+                    content, 
+                    image,
+                    creation_time
+                    ) 
+                    VALUES("{}","{}","{}","{}");""".format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
+        
+        elif form.content.data:
+            query_db(
+                """INSERT INTO Posts (
+                    u_id, 
+                    content, 
+                    creation_time
+                    ) 
+                    VALUES("{}","{}","{}");""".format(user['id'], content, datetime.now()))
+        else:
+            flash('You must enter some content or upload an image')
+
+        #query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
         return redirect(url_for('stream', username=username))
+    
     posts = query_db('SELECT p.*, u.*, (SELECT COUNT(*) FROM Comments WHERE p_id=p.id) AS cc FROM Posts AS p JOIN Users AS u ON u.id=p.u_id WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id={0}) OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id={0}) OR p.u_id={0} ORDER BY p.creation_time DESC;'.format(user['id']))
     return render_template('stream.html', title='Stream', username=username, form=form, posts=posts)
+
+
 
 # comment page for a given post and user.
 @app.route('/comments/<username>/<int:p_id>', methods=['GET', 'POST'])
