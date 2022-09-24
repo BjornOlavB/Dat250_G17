@@ -34,13 +34,20 @@ def init_db():
             db.cursor().executescript(f.read())
         db.commit()
 
+
+# ERIK FIXING SECURITY OF QUERIES
+
+
 # perform generic query, not very secure yet
-def query_db(query, one=False):
+def query_db(query, *argv, one=False):
     db = get_db()
-    cursor = db.execute(query)
+    cursor = db.execute(query,argv)
     rv = cursor.fetchall()
     cursor.close()
     db.commit()
+
+    # Basically says if one is true, return the first row, otherwise return all rows
+    # If nothing was found return None
     return (rv[0] if rv else None) if one else rv
 
 # TODO: Add more specific queries to simplify code
