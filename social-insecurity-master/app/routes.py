@@ -5,6 +5,10 @@ from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsFor
 from datetime import datetime
 import os
 from werkzeug.security import generate_password_hash,check_password_hash
+import time
+
+
+
 
 # validation check for upload of file size
 def validate_file_size(file):
@@ -13,24 +17,6 @@ def validate_file_size(file):
         return False
     else:
         return True
-
-# validation check in register
-def RegisterValidate(register):
-    if register.first_name.data == "" or register.last_name.data == "" or \
-        register.username.data == "" or register.password.data == "" or \
-        register.confirm_password.data == "":
-        return False
-
-    if not re.search("(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}", register.password.data):
-        flash('password does not meet requirements: Requires 8 characters including one uppercase letter, one lowercase letter, and one number or special character.')
-        return False
-    
-    if register.password.data != register.confirm_password.data:
-        flash('password and confirm password do not match')
-        return False
-    return True
-
-
 
 
 
@@ -42,42 +28,101 @@ def RegisterValidate(register):
 @app.route('/index', methods=['GET', 'POST'])
 def index():
     form = IndexForm()
+    
     if form.login.is_submitted() and form.login.submit.data:
+        form.login.validate_on_submit() # CANT GET THIS TO WORK OBS!!!
         user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.login.username.data), one=True)
+        
+        # Could not find user
         if user == None:
             flash('Wrong username or password!')
-        elif check_password_hash(user['password'],  form.login.password.data):
+            return render_template('index.html', title='Welcome', form=form)
+    
+        # Calculate the time left until the user can login again
+        if user["login_timeout"] == 0:
+            time_left = 0
+        else:
+            lockout_date = user["login_timeout"]
+            time_left = lockout_date - round(time.time())
+
+            minutes = round(time_left//60)
+            seconds = round(time_left%60)
+
+
+        # Restore the login_attemps and login_timeout when the time is over
+        if time_left <= 0 and user["login_timeout"] != 0:
+            query_db('UPDATE Users \
+                    SET login_attempts = 0, login_timeout = 0\
+                    WHERE id = "{}";'.format(user["id"]), one=True)
+            user = query_db('SELECT * FROM Users WHERE username="{}";'.format(user["id"]), one=True)
+        
+        # redirect and flash that the user is locked out 
+        elif time_left > 0:
+            flash(f'{minutes} min {seconds} sec until you can login again!')
+            #return redirect(url_for('index'))
+            return render_template('index.html', title='Welcome', form=form)
+
+        # User successfully logged in
+        if check_password_hash(user['password'],  form.login.password.data):
             res = make_response(redirect(url_for('stream', username=form.login.username.data)))
             res.set_cookie("username",form.login.username.data)
             return res
-        else:
-            flash('Sorry, wrong username or password!')
 
-    elif form.register.is_submitted() and form.register.submit.data:
-        form.validate_on_submit() # display form errors
-        if RegisterValidate(form.register):
+
+        # Logic for setting login_attempts and login_timeout
+        elif not check_password_hash(user["Password"], form.login.password.data):
+            
+            if user["Login_attempts"] < 2:
+                query_db('UPDATE Users SET login_attempts = login_attempts + 1 WHERE id = "{}";'.format(user["id"]), one=True)
+                flash('Wrong username or password!')
+
+            elif user["Login_attempts"] == 2:
+                lockout_time = 5 # minutes
+                lockout_stamp = time.time() + lockout_time*60 # minutes
+             
+                flash(f'You have been locked out of your account for {lockout_time} minutes due to too many failed login attempts')
+                query_db('UPDATE Users SET login_timeout = "{}" WHERE id = "{}";'.format(lockout_stamp,user["id"]), one=True)
+        #_________________________________
+
+        else:
+            flash('Unknown error')
+
+    elif form.register.is_submitted() and form.register.submit.data and form.register.validate_on_submit():
             user = query_db('SELECT * FROM Users WHERE username="{}";'.format(form.register.username.data), one=True)
             if user != None:
                 flash('Username is already taken!')
             else:
-                query_db('INSERT INTO Users (username, first_name, last_name, password) VALUES("{}", "{}", "{}", "{}");'.format(form.register.username.data, form.register.first_name.data,
-                form.register.last_name.data, generate_password_hash(form.register.password.data,"sha256")))
+                query_db(
+                    """INSERT INTO Users (
+                        username, 
+                        first_name, 
+                        last_name, 
+                        password,
+                        login_attempts,
+                        login_timeout
+                        ) VALUES("{}","{}","{}","{}",0,0);"""
+                .format(form.register.username.data, 
+                        form.register.first_name.data,
+                        form.register.last_name.data, 
+                        generate_password_hash(form.register.password.data,"sha256")))
+
+                flash(f'account {form.register.username.data} was successfully created')
                 return redirect(url_for('index'))
     return render_template('index.html', title='Welcome', form=form)
 
 # content stream page
 @app.route('/stream/<username>', methods=['GET', 'POST'])
 def stream(username):
+    form = PostForm()
     coockieUsername = request.cookies.get("username")
     if coockieUsername != username:
         return redirect(url_for("index"))
-    form = PostForm()
+
     user = query_db('SELECT * FROM Users WHERE username="{}";'.format(username), one=True)
     if form.is_submitted():
         if form.image.data:
             image_path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(image_path)
-
         query_db('INSERT INTO Posts (u_id, content, image, creation_time) VALUES({}, "{}", "{}", \'{}\');'.format(user['id'], form.content.data, form.image.data.filename, datetime.now()))
         return redirect(url_for('stream', username=username))
     posts = query_db('SELECT p.*, u.*, (SELECT COUNT(*) FROM Comments WHERE p_id=p.id) AS cc FROM Posts AS p JOIN Users AS u ON u.id=p.u_id WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id={0}) OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id={0}) OR p.u_id={0} ORDER BY p.creation_time DESC;'.format(user['id']))
