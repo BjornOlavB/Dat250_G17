@@ -29,14 +29,12 @@ def my_validation(form_type):
 def index():
     form = IndexForm()
     
-
     if form.login.is_submitted() and form.login.submit.data and my_validation(form.login):
         user = query_db('SELECT * FROM Users WHERE username=?;',form.login.username.data, one=True)
         # Could not find user
         if user == None:
             flash('Wrong username or password!')
             return render_template('index.html', title='Welcome', form=form)
-
 
         # Calculate the time left until the user can login again
         if user["login_timeout"] == None:
@@ -58,7 +56,6 @@ def index():
         # redirect and flash that the user is locked out 
         elif time_left > 0:
             flash(f'{minutes} min {seconds} sec until you can login again!')
-            #return redirect(url_for('index'))
             return render_template('index.html', title='Welcome', form=form)
 
         # User successfully logged in
@@ -68,8 +65,8 @@ def index():
                     SET login_attempts = 0, login_timeout = NULL
                     WHERE id = ?;""",user["id"], one=True)
 
-            res = make_response(redirect(url_for('stream', username=form.login.username.data)))
-            res.set_cookie("username",form.login.username.data)
+            res = make_response(redirect(url_for('stream', username=user["username"])))
+            res.set_cookie("username",user["username"])
             return res
 
 
@@ -107,9 +104,9 @@ def index():
                         form.register.first_name.data,
                         form.register.last_name.data, 
                         generate_password_hash(form.register.password.data,"sha256"))
-
                 flash(f'account {form.register.username.data} was successfully created')
                 return redirect(url_for('index'))
+                
     return render_template('index.html', title='Welcome', form=form)
 
 # content stream page
@@ -132,6 +129,21 @@ def stream(username):
 
         # remove "\r" and "\n" and <"> from the content of the post escape the content
         content = form.content.data.replace("\n", "").replace("\r", "")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
