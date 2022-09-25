@@ -118,11 +118,78 @@ def stream(username):
 
     # if the user is not logged in or doesn't exist, redirect to the login page
     coockieUsername = request.cookies.get("username")
-    if coockieUsername != username:
+    if coockieUsername != username or user == None:
         return redirect(url_for('index'))
-    elif user == None:
-        flash("User does not exist")
-        return redirect(url_for('index'))
+
+    
+   
+
+    # if the user is not logged in or doesn't exist, don't redirect them
+    
+
+    if form.is_submitted() and form.submit.data and my_validation(form):
+        maxPosts = 200 # number of posts before you cannot post anymore until the next day
+      
+
+        # Calculate the time left until the user can post on stream again
+        if user["stream_timeout"] == None:
+            time_left = 0
+        else:
+            lockout_stamp =  user["stream_timeout"]
+            time_left = round(lockout_stamp - time.time())
+            hours = time_left // 3600
+            min = (time_left % 3600) // 60
+            sec = time_left % 60
+
+        # Restore the stream_attemps and stream_timeout when the time is over
+        if time_left <= 0 and user["stream_timeout"] != None:
+            self.dbcontext.reset_stream_attempts(self,user)
+            user = self.dbcontext.retrieve_user(username)
+        
+        # flash that the user has hit the daily post limit
+        elif time_left > 0:
+            flash = f'You have hit your daily limit of {maxPosts} posts. {hours} h {min} min {sec} sec until you can post on stream again!'
+            return flash,success,submitted
+            
+
+        # Logic for setting stream_posts and stream_timeout
+        if user["stream_posts"] < (maxPosts-1):
+            self.dbcontext.increment_stream_posts(user)
+            flash = f'You have {maxPosts - (user["stream_posts"]+1)} posts left today'
+    
+        elif user["stream_posts"] == (maxPosts-1):
+            now = datetime.datetime.now()
+            tomorrow = now + datetime.timedelta(days=1)
+            lockout_date = datetime.datetime.combine(tomorrow, datetime.time.min) - now
+            lockout_stamp = time.time() + lockout_date.total_seconds()
+            time_left = round(lockout_stamp - time.time())
+        
+            hours = time_left // 3600
+            min = (time_left % 3600) // 60
+            sec = time_left % 60
+            flash = f'You have hit your daily limit of {maxPosts} posts. {hours} h {min} min {sec} sec until you can post on stream again!'
+            self.dbcontext.set_stream_timeout(user,lockout_stamp)
+        #_________________________________
+
+        success = self.dbcontext.insert_post(user,form)
+        if success and form.image.data:
+            path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
+            form.image.data.save(path)
+        elif not success:
+            flash = 'You must enter some content or upload an image'
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     if form.is_submitted() and form.submit.data and my_validation(form):
