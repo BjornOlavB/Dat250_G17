@@ -53,7 +53,7 @@ def index():
             query_db("""UPDATE Users 
                     SET login_attempts = 0, login_timeout = NULL
                     WHERE id = ?;""",user["id"], one=True)
-            user = query_db('SELECT * FROM Users WHERE username=?;',user["id"], one=True)
+            user = query_db('SELECT * FROM Users WHERE username=?;',user["username"], one=True)
         
         # redirect and flash that the user is locked out 
         elif time_left > 0:
