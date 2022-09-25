@@ -57,6 +57,8 @@ class IndexForm(FlaskForm):
 
 class PostForm(FlaskForm):
 
+    print(FlaskForm.content)
+
     content_validator = [
         validators.Length(
             min=1,

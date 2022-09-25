@@ -1,11 +1,13 @@
-import re
 from flask import render_template, flash, redirect, url_for, request,make_response
 from app import app, query_db
 from app.forms import IndexForm, PostForm, FriendsForm, ProfileForm, CommentsForm
-from datetime import datetime
+import datetime
 import os
 from werkzeug.security import generate_password_hash,check_password_hash
 import time
+
+maxPosts = 3 # limit of posts per day for a user
+login_timeout = 5*60 # how many seconds the user has to wait to be able to login again
 
 
 
@@ -29,6 +31,7 @@ def my_validation(form_type):
 def index():
     form = IndexForm()
     
+    # Logging in to an account
     if form.login.is_submitted() and form.login.submit.data and my_validation(form.login):
         user = query_db('SELECT * FROM Users WHERE username=?;',form.login.username.data, one=True)
         # Could not find user
@@ -44,7 +47,6 @@ def index():
             time_left = lockout_date - round(time.time())
             minutes = round(time_left//60)
             seconds = round(time_left%60)
-
 
         # Restore the login_attemps and login_timeout when the time is over
         if time_left <= 0 and user["login_timeout"] != None:
@@ -78,15 +80,14 @@ def index():
                 flash('Wrong username or password!')
 
             elif user["Login_attempts"] == 2:
-                lockout_time = 5 # minutes
-                lockout_stamp = time.time() + lockout_time*60 # minutes
-                flash(f'You have been locked out of your account for {lockout_time} minutes due to too many failed login attempts')
+                lockout_stamp = time.time() + login_timeout
+                flash(f'You have been locked out of your account for {login_timeout} minutes due to too many failed login attempts')
                 query_db('UPDATE Users SET login_timeout = ? WHERE id = ?;',lockout_stamp,user["id"], one=True)
         #_________________________________
-
         else:
-            flash('Unknown error')
+            flash('Wrong username or password!')
 
+    # Creating a new user
     elif form.register.is_submitted() and form.register.submit.data and my_validation(form.register):
             user = query_db('SELECT * FROM Users WHERE username=?;',form.register.username.data,one=True)
             if user != None:
@@ -114,23 +115,19 @@ def index():
 def stream(username):
     form = PostForm()
 
-    user = query_db('SELECT * FROM Users WHERE username=?;',username, one=True)
-
     # if the user is not logged in or doesn't exist, redirect to the login page
     coockieUsername = request.cookies.get("username")
-    if coockieUsername != username or user == None:
+    if coockieUsername != username:
         return redirect(url_for('index'))
 
-    
-   
+    # calling this after cooki check removes the need of querying the database each time
+    user = query_db('SELECT * FROM Users WHERE username=?;',username, one=True)
+    if user == None:
+        return redirect(url_for('index'))
 
-    # if the user is not logged in or doesn't exist, don't redirect them
-    
 
     if form.is_submitted() and form.submit.data and my_validation(form):
-        maxPosts = 200 # number of posts before you cannot post anymore until the next day
       
-
         # Calculate the time left until the user can post on stream again
         if user["stream_timeout"] == None:
             time_left = 0
@@ -143,75 +140,43 @@ def stream(username):
 
         # Restore the stream_attemps and stream_timeout when the time is over
         if time_left <= 0 and user["stream_timeout"] != None:
-            self.dbcontext.reset_stream_attempts(self,user)
-            user = self.dbcontext.retrieve_user(username)
+            query_db("""UPDATE Users 
+				SET stream_posts = 0, stream_timeout = NULL
+				WHERE id = ?;""",user["id"], one=True)
+
+            # retreieve the updated user
+            user = query_db('SELECT * FROM Users WHERE username=?;',username,one=True)
         
         # flash that the user has hit the daily post limit
         elif time_left > 0:
-            flash = f'You have hit your daily limit of {maxPosts} posts. {hours} h {min} min {sec} sec until you can post on stream again!'
-            return flash,success,submitted
+            flash(f'You have hit your daily limit of {maxPosts} posts. {hours} h {min} min {sec} sec until you can post on stream again!')
+            return redirect(url_for('stream', username=user["username"]))
             
 
         # Logic for setting stream_posts and stream_timeout
         if user["stream_posts"] < (maxPosts-1):
-            self.dbcontext.increment_stream_posts(user)
-            flash = f'You have {maxPosts - (user["stream_posts"]+1)} posts left today'
+            query_db("""UPDATE Users 
+				SET stream_posts = stream_posts + 1
+				WHERE id = ?;""",user["id"], one=True)
+            flash(f'You have {maxPosts - (user["stream_posts"]+1)} posts left today')
     
         elif user["stream_posts"] == (maxPosts-1):
             now = datetime.datetime.now()
             tomorrow = now + datetime.timedelta(days=1)
             lockout_date = datetime.datetime.combine(tomorrow, datetime.time.min) - now
-            lockout_stamp = time.time() + lockout_date.total_seconds()
+            lockout_stamp = time.time() + 20 #lockout_date.total_seconds()
             time_left = round(lockout_stamp - time.time())
         
             hours = time_left // 3600
             min = (time_left % 3600) // 60
             sec = time_left % 60
-            flash = f'You have hit your daily limit of {maxPosts} posts. {hours} h {min} min {sec} sec until you can post on stream again!'
-            self.dbcontext.set_stream_timeout(user,lockout_stamp)
+            flash(f"You have hit your daily limit of {maxPosts} posts. {hours} h {min} min {sec} sec until you can post on stream again!")
+            query_db("""UPDATE Users 
+				SET stream_posts = 0, stream_timeout = ?
+				WHERE id = ?;""",lockout_stamp,user["id"], one=True)
         #_________________________________
 
-        success = self.dbcontext.insert_post(user,form)
-        if success and form.image.data:
-            path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
-            form.image.data.save(path)
-        elif not success:
-            flash = 'You must enter some content or upload an image'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    if form.is_submitted() and form.submit.data and my_validation(form):
-
-        # remove "\r" and "\n" and <"> from the content of the post escape the content
         content = form.content.data.replace("\n", "").replace("\r", "")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         if form.image.data:
             path = os.path.join(app.config['UPLOAD_PATH'], form.image.data.filename)
             form.image.data.save(path)
@@ -221,9 +186,9 @@ def stream(username):
                     content, 
                     image,
                     creation_time
-                    ) 
+                    )
                     VALUES(?, ?, ?, ?);""",
-                    user['id'], form.content.data, form.image.data.filename, datetime.now())
+                    user['id'], form.content.data, form.image.data.filename, datetime.datetime.now())
         
         elif form.content.data:
             query_db(
@@ -233,13 +198,11 @@ def stream(username):
                     creation_time
                     ) 
                     VALUES(?,?,?);""",
-                    user['id'], content, datetime.now())
+                    user['id'], content, datetime.datetime.now())
         else:
             flash('You must enter some content or upload an image')
+            return redirect(url_for('stream', username=username))
 
-       
-        return redirect(url_for('stream', username=username))
-    
     posts = query_db("""SELECT p.*, u.*, (SELECT COUNT(*) 
                         FROM Comments 
                         WHERE p_id=p.id) AS cc 
@@ -262,7 +225,7 @@ def comments(username, p_id):
     form = CommentsForm()
     if form.is_submitted():
         user = query_db('SELECT * FROM Users WHERE username=?;', username,one=True)
-        query_db('INSERT INTO Comments (p_id, u_id, comment, creation_time) VALUES(?,?,?,?);',p_id, user['id'], form.comment.data, datetime.now())
+        query_db('INSERT INTO Comments (p_id, u_id, comment, creation_time) VALUES(?,?,?,?);',p_id, user['id'], form.comment.data, datetime.datetime.now())
 
     post = query_db('SELECT * FROM Posts WHERE id=?;',p_id, one=True)
     all_comments = query_db("""SELECT DISTINCT * FROM Comments 
