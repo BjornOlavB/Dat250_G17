@@ -80,7 +80,11 @@ def index():
 
             elif user["Login_attempts"] == 2:
                 lockout_stamp = time.time() + login_timeout
-                flash(f'You have been locked out of your account for {login_timeout} minutes due to too many failed login attempts')
+
+                min = (login_timeout % 3600) // 60
+                sec = login_timeout % 60
+
+                flash(f'You have been locked out of your account for {min} min {sec} sec due to too many failed login attempts')
                 query_db('UPDATE Users SET login_timeout = ? WHERE id = ?;',lockout_stamp,user["id"], one=True)
         #_________________________________
         else:
