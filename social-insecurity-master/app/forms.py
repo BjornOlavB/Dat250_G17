@@ -63,13 +63,6 @@ class IndexForm(FlaskForm):
     login = FormField(LoginForm)
     register = FormField(RegisterForm)
 
-
-
-
-
-
-        
-
 class PostForm(FlaskForm):
 
     # Require atleast one of the below fields
@@ -77,13 +70,23 @@ class PostForm(FlaskForm):
         if not form.content.data and not form.image.data:
             raise ValidationError('One of the fields must be filled')
 
+    def ContentWhiteSpace(form,field):
+        if field.data:
+            if len(field.data.split()) == 0:
+                raise ValidationError('Content cannot be empty')
+            elif len(field.data.splitlines()) > 10:
+                raise ValidationError('Content cannot be more than 10 lines')
+            
+    
+
     content_validator = [
         validators.Length(
             min=1, 
             max=1000,
             message="Post must be between 1 and 1000 characters long"
         ),
-        ConditionalRequired
+        ConditionalRequired,
+        ContentWhiteSpace
     ]
 
     image_validator = [
