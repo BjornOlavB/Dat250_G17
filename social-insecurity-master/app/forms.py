@@ -1,6 +1,7 @@
 from wsgiref.validate import validator
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, FormField, TextAreaField, validators
+from wtforms.validators import Required, ValidationError
 from flask_wtf.file import FileField, FileAllowed
 from wtforms.fields.html5 import DateField
 
@@ -10,6 +11,13 @@ from wtforms.fields.html5 import DateField
 # and the routes.py will read the values of the fields
 # TODO: Add validation, maybe use wtforms.validators??
 # TODO: There was some important security feature that wtforms provides, but I don't remember what; implement it
+
+
+# Will make atleast one of the fields required
+# Used for posting either content or image    
+
+
+
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[validators.DataRequired()],render_kw={'placeholder': 'Username'})
@@ -55,40 +63,78 @@ class IndexForm(FlaskForm):
     login = FormField(LoginForm)
     register = FormField(RegisterForm)
 
+
+
+
+
+
+        
+
 class PostForm(FlaskForm):
 
-    print(FlaskForm.content)
+    # Require atleast one of the below fields
+    def ConditionalRequired(form,_):
+        if not form.content.data and not form.image.data:
+            raise ValidationError('One of the fields must be filled')
+
+    content_validator = [
+        validators.Length(
+            min=1, 
+            max=1000,
+            message="Post must be between 1 and 1000 characters long"
+        ),
+        ConditionalRequired
+    ]
+
+    image_validator = [
+        FileAllowed(
+            ['jpg', 'png'], 
+            message='You can only upload extensions: jpg, png'
+        ),
+        ConditionalRequired
+    ]
+
+    content = TextAreaField('New Post', validators=content_validator, render_kw={'placeholder': 'What are you thinking about?'})
+    image = FileField('Image',validators=image_validator) 
+    submit = SubmitField('Post')
+
+  
+class CommentsForm(FlaskForm):
 
     content_validator = [
         validators.Length(
             min=1,
             max=1000,
             message="Post must be between 1 and 1000 characters long"),
-        validators.Optional()
     ]
-    image_validator = [
-        FileAllowed(
-            ['jpg', 'png'], 
-            message='You can only upload extensions: jpg, png'
-        )
-    ]
-    content = TextAreaField('New Post', validators=content_validator, render_kw={'placeholder': 'What are you thinking about?'})
-    image = FileField('Image',validators=image_validator) 
-    submit = SubmitField('Post')
 
-class CommentsForm(FlaskForm):
-    comment = TextAreaField('New Comment', render_kw={'placeholder': 'What do you have to say?'})
+    comment = TextAreaField('New Comment', validators=content_validator, render_kw={'placeholder': 'What do you have to say?'})
     submit = SubmitField('Comment')
 
 class FriendsForm(FlaskForm):
-    username = StringField('Friend\'s username', render_kw={'placeholder': 'Username'})
+
+    username_validator = [
+        validators.Regexp(
+            "^[A-Za-z_][A-Za-z0-9_]{1,29}$", # 1(non number) + (1-4) alphanumeric or underscore
+            message="Username must be 2-30 characters long, not start with a number, and can only contain letters, numbers, and underscores"),
+    ]
+
+    username = StringField('Friend\'s username', validators=username_validator, render_kw={'placeholder': 'Username'})
     submit = SubmitField('Add Friend')
 
 class ProfileForm(FlaskForm):
-    education = StringField('Education', render_kw={'placeholder': 'Highest education'})
-    employment = StringField('Employment', render_kw={'placeholder': 'Current employment'})
-    music = StringField('Favorite song', render_kw={'placeholder': 'Favorite song'})
-    movie = StringField('Favorite movie', render_kw={'placeholder': 'Favorite movie'})
-    nationality = StringField('Nationality', render_kw={'placeholder': 'Your nationality'})
-    birthday = DateField('Birthday')
+
+    profile_validator = [
+        validators.Length(
+            min=1,
+            max=200,
+            message="input must be between 1 and 200 characters long")
+    ]
+
+    education = StringField('Education', validators=profile_validator, render_kw={'placeholder': 'Highest education'})
+    employment = StringField('Employment', validators=profile_validator, render_kw={'placeholder': 'Current employment'})
+    music = StringField('Favorite song', validators=profile_validator, render_kw={'placeholder': 'Favorite song'})
+    movie = StringField('Favorite movie', validators=profile_validator, render_kw={'placeholder': 'Favorite movie'})
+    nationality = StringField('Nationality', validators=profile_validator, render_kw={'placeholder': 'Your nationality'})
+    birthday = DateField('Birthday', validators=profile_validator)
     submit = SubmitField('Update Profile')
