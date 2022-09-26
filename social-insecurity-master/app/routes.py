@@ -6,9 +6,8 @@ import os
 from werkzeug.security import generate_password_hash,check_password_hash
 import time
 
-maxPosts = 3 # limit of posts per day for a user
+maxPosts = 200 # limit of posts per day for a user
 login_timeout = 5*60 # how many seconds the user has to wait to be able to login again
-
 
 
 # function that wraps the validate_on_submit() method of the form
@@ -127,6 +126,7 @@ def stream(username):
 
 
     if form.is_submitted() and form.submit.data and my_validation(form):
+       
       
         # Calculate the time left until the user can post on stream again
         if user["stream_timeout"] == None:
@@ -164,7 +164,7 @@ def stream(username):
             now = datetime.datetime.now()
             tomorrow = now + datetime.timedelta(days=1)
             lockout_date = datetime.datetime.combine(tomorrow, datetime.time.min) - now
-            lockout_stamp = time.time() + 20 #lockout_date.total_seconds()
+            lockout_stamp = time.time() + lockout_date.total_seconds()
             time_left = round(lockout_stamp - time.time())
         
             hours = time_left // 3600
@@ -189,7 +189,6 @@ def stream(username):
                     )
                     VALUES(?, ?, ?, ?);""",
                     user['id'], form.content.data, form.image.data.filename, datetime.datetime.now())
-        
         elif form.content.data:
             query_db(
                 """INSERT INTO Posts (
@@ -201,7 +200,7 @@ def stream(username):
                     user['id'], content, datetime.datetime.now())
         else:
             flash('You must enter some content or upload an image')
-            return redirect(url_for('stream', username=username))
+        return redirect(url_for('stream', username=username))
 
     posts = query_db("""SELECT p.*, u.*, (SELECT COUNT(*) 
                         FROM Comments 
@@ -211,7 +210,7 @@ def stream(username):
                         WHERE p.u_id IN (SELECT u_id FROM Friends WHERE f_id=?) 
                         OR p.u_id IN (SELECT f_id FROM Friends WHERE u_id=?) OR p.u_id=?
                         ORDER BY p.creation_time DESC;""",user['id'], user['id'], user['id'])
-                        
+              
     return render_template('stream.html', title='Stream', username=username, form=form, posts=posts)
 
 
